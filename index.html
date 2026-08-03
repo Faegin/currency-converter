@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Valutaomregner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1F7A5C" id="theme-color-meta">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Valuta">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -218,6 +225,47 @@
     font-weight:600;
   }
 
+  .install-bar{
+    display:none;
+    align-items:center;
+    gap:12px;
+    margin-top:18px;
+    padding:12px 14px;
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+  }
+  .install-bar.show{ display:flex; }
+  .install-text{
+    flex:1;
+    font-size:13px;
+    line-height:1.35;
+    color: var(--ink);
+  }
+  .install-text b{ font-weight:700; }
+  .install-text span{ display:block; color: var(--ink-soft); font-size:12px; }
+  .install-yes{
+    border:none;
+    background: var(--accent);
+    color:#fff;
+    font-family: var(--font-body);
+    font-weight:700;
+    font-size:14px;
+    padding:9px 15px;
+    border-radius:999px;
+    cursor:pointer;
+  }
+  .install-yes:active{ transform: scale(0.96); }
+  .install-no{
+    border:none;
+    background:none;
+    color: var(--ink-soft);
+    font-size:20px;
+    line-height:1;
+    padding:4px 6px;
+    cursor:pointer;
+  }
   .sheet-overlay{
     position:fixed;
     inset:0;
@@ -334,6 +382,12 @@
       </button>
     </div>
     <p class="status-msg" id="status-msg"></p>
+
+    <div class="install-bar" id="install-bar">
+      <p class="install-text"><b>Læg den på hjemmeskærmen</b><span>Åbner uden browserkant og virker offline.</span></p>
+      <button class="install-yes" id="install-yes">Installer</button>
+      <button class="install-no" id="install-no" aria-label="Ikke nu">&times;</button>
+    </div>
   </div>
 
   <div class="sheet-overlay" id="sheet-overlay">
@@ -389,6 +443,12 @@
     MXN:20.141, MYR:4.607, NOK:10.7471, NZD:1.9822, PHP:71.609, PLN:4.2501,
     RON:5.2544, SEK:10.8715, SGD:1.4869, THB:37.951, TRY:53.082, USD:1.162,
     ZAR:19.1357
+  };
+
+  // Lille indpakning så appen ikke går ned hvis lagring er slået fra i browseren.
+  const store = {
+    get(k){ try { return localStorage.getItem('valuta.' + k); } catch(e){ return null; } },
+    set(k,v){ try { localStorage.setItem('valuta.' + k, v); } catch(e){} }
   };
 
   const state = {
@@ -501,6 +561,7 @@
           state.source = source.name;
           state.live = true;
           state.error = '';
+          store.set('kurser', JSON.stringify({rates: parsed.rates, date: parsed.date, source: source.name}));
           return;
         }catch(err){
           problems.push(`${source.name}: ${err.message}`);
@@ -570,15 +631,60 @@
   overlay.addEventListener('click', (e) => { if(e.target === overlay) closeSheet(); });
 
   const themeBtn = document.getElementById('theme-btn');
-  function setTheme(mode){
+  const themeMeta = document.getElementById('theme-color-meta');
+  function setTheme(mode, remember){
     document.documentElement.dataset.theme = mode;
     themeBtn.textContent = mode === 'dark' ? '☀️' : '🌙';
     themeBtn.setAttribute('aria-label', mode === 'dark' ? 'Skift til lyst tema' : 'Skift til mørkt tema');
+    if(themeMeta) themeMeta.setAttribute('content', mode === 'dark' ? '#101815' : '#1F7A5C');
+    if(remember) store.set('tema', mode);
   }
-  setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const savedTheme = store.get('tema');
+  setTheme(savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'), false);
   themeBtn.addEventListener('click', () => {
-    setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+    setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
   });
+
+  // Installations-prompt. Chrome fyrer beforeinstallprompt når appen kan installeres.
+  const installBar = document.getElementById('install-bar');
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if(store.get('installAfvist') !== 'ja') installBar.classList.add('show');
+  });
+  document.getElementById('install-yes').addEventListener('click', async () => {
+    installBar.classList.remove('show');
+    if(!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+  });
+  document.getElementById('install-no').addEventListener('click', () => {
+    installBar.classList.remove('show');
+    store.set('installAfvist', 'ja');
+  });
+  window.addEventListener('appinstalled', () => {
+    installBar.classList.remove('show');
+    deferredPrompt = null;
+  });
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW fejlede:', err));
+    });
+  }
+
+  // Start med sidst gemte kurser, så du ser en frisk kurs selv uden forbindelse.
+  try{
+    const cached = JSON.parse(store.get('kurser'));
+    if(cached && cached.rates && Object.keys(cached.rates).length > 5){
+      state.eurRates = {...FALLBACK_EUR, ...cached.rates};
+      state.date = cached.date || state.date;
+      state.source = (cached.source || 'gemt') + ', gemt';
+      state.live = true;
+    }
+  }catch(e){}
 
   updateChips();
   recompute();

@@ -1,0 +1,17 @@
+{
+  "name": "Valutaomregner",
+  "short_name": "Valuta",
+  "description": "To valutaer, et beløb, et svar.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EFF4EE",
+  "theme_color": "#1F7A5C",
+  "lang": "da",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
