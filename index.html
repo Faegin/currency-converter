@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Valutaomregner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #EFF4EE;
+    --ink: #16223A;
+    --ink-soft: #5B6579;
+    --accent: #1F7A5C;
+    --accent-soft: #DCEAE3;
+    --gold: #B8873A;
+    --surface: #FFFFFF;
+    --border: #DDE3DA;
+    --radius-lg: 24px;
+    --radius-md: 14px;
+    --shadow: 0 14px 34px -14px rgba(22,34,58,0.22);
+    --font-display: 'JetBrains Mono', monospace;
+    --font-body: 'Manrope', sans-serif;
+  }
+  [data-theme="dark"]{
+    --bg: #101815;
+    --ink: #E7EFE9;
+    --ink-soft: #8E9E95;
+    --accent: #4FBF95;
+    --accent-soft: #1E3A2F;
+    --gold: #D6A75C;
+    --surface: #1A2420;
+    --border: #2B3A34;
+    --shadow: 0 14px 34px -14px rgba(0,0,0,0.6);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background: var(--bg);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    background-image: radial-gradient(circle at 15% 8%, rgba(31,122,92,0.08), transparent 45%),
+                       radial-gradient(circle at 85% 92%, rgba(184,135,58,0.08), transparent 45%);
+    color: var(--ink);
+    font-family: var(--font-body);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  }
+  .app{
+    width:100%;
+    max-width:420px;
+  }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin: 0 4px 14px;
+  }
+  .theme-btn{
+    border:none;
+    background: var(--surface);
+    border-radius: 999px;
+    width:36px;
+    height:36px;
+    font-size:16px;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    box-shadow: 0 4px 12px -6px rgba(0,0,0,0.35);
+    transition: transform 0.15s ease;
+  }
+  .theme-btn:active{ transform: scale(0.9); }
+  .eyebrow{
+    margin:0;
+    font-size:12px;
+    letter-spacing:0.16em;
+    font-weight:700;
+    text-transform:uppercase;
+    color: var(--ink-soft);
+  }
+  .notes{
+    position:relative;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    overflow:visible;
+    opacity:0;
+    transform: translateY(14px);
+    animation: rise 0.5s ease forwards;
+  }
+  @keyframes rise{ to{ opacity:1; transform:none; } }
+  .note{
+    padding: 30px 26px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .note-to{ animation-delay:0.08s; }
+  .slot-label{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color: var(--ink-soft);
+  }
+  .currency-chip{
+    align-self:flex-start;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border:none;
+    border-radius: 999px;
+    padding:8px 14px 8px 10px;
+    font-family: var(--font-body);
+    font-weight:700;
+    font-size:15px;
+    cursor:pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .currency-chip:active{ transform: scale(0.96); }
+  .currency-chip .flag{ font-size:18px; line-height:1; }
+  .currency-chip .caret{ font-size:10px; opacity:0.6; margin-left:2px; }
+
+  .amount-input, .amount-result{
+    font-family: var(--font-display);
+    font-weight:600;
+    font-size:40px;
+    line-height:1.1;
+    letter-spacing:-0.01em;
+    color: var(--ink);
+    border:none;
+    background:transparent;
+    padding:0;
+    width:100%;
+  }
+  .amount-input{ outline:none; }
+  .amount-input::placeholder{ color:#C7CDC2; }
+  .amount-result{ color: var(--accent); }
+
+  .divider{
+    position:relative;
+    height:0;
+    border-top:2px dashed var(--border);
+    margin:0 26px;
+  }
+  .divider::before, .divider::after{
+    content:"";
+    position:absolute;
+    top:-11px;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background: var(--bg);
+  }
+  .divider::before{ left:-37px; }
+  .divider::after{ right:-37px; }
+
+  .swap-btn{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:52px;
+    height:52px;
+    border-radius:50%;
+    border:4px solid var(--bg);
+    background: var(--accent);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    box-shadow: 0 6px 16px -4px rgba(31,122,92,0.5);
+    transition: transform 0.35s cubic-bezier(.34,1.56,.64,1);
+  }
+  .swap-btn:active{ transform: translate(-50%,-50%) scale(0.92); }
+  .swap-btn.spin{ transform: translate(-50%,-50%) rotate(180deg); }
+  .swap-btn svg{ width:22px; height:22px; }
+
+  .rate-ticker{
+    margin-top:18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    font-family: var(--font-display);
+    font-size:13px;
+    color: var(--ink-soft);
+    min-height:20px;
+    text-align:center;
+  }
+  .rate-ticker #rate-text{ letter-spacing:0.01em; }
+  .refresh-btn{
+    border:none;
+    background:none;
+    color: var(--gold);
+    cursor:pointer;
+    padding:4px;
+    display:flex;
+    border-radius:8px;
+  }
+  .refresh-btn svg{ width:16px; height:16px; transition: transform 0.4s ease; }
+  .refresh-btn.spin svg{ transform: rotate(360deg); }
+
+  .status-msg{
+    margin-top:10px;
+    text-align:center;
+    font-size:13px;
+    color: var(--gold);
+    font-weight:600;
+  }
+
+  .sheet-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(22,34,58,0.42);
+    display:none;
+    align-items:flex-end;
+    justify-content:center;
+    z-index:10;
+  }
+  .sheet-overlay.open{
+    display:flex;
+  }
+  .sheet{
+    width:100%;
+    max-width:420px;
+    background: var(--surface);
+    border-radius: 22px 22px 0 0;
+    padding:18px 18px max(18px, env(safe-area-inset-bottom));
+    max-height:72vh;
+    display:flex;
+    flex-direction:column;
+    box-shadow: 0 -14px 34px -14px rgba(22,34,58,0.3);
+    animation: sheetUp 0.28s ease forwards;
+  }
+  @keyframes sheetUp{ from{ transform:translateY(100%);} to{ transform:none; } }
+  .sheet-handle{
+    width:36px; height:4px; border-radius:2px;
+    background: var(--border);
+    margin: 0 auto 14px;
+  }
+  .sheet-search{
+    font-family: var(--font-body);
+    font-size:16px;
+    padding:12px 14px;
+    border-radius: var(--radius-md);
+    border:1px solid var(--border);
+    background:#FAFBF9;
+    color: var(--ink);
+    margin-bottom:10px;
+    outline:none;
+  }
+  .sheet-search:focus{ border-color: var(--accent); }
+  [data-theme="dark"] .sheet-search{ background: #141D19; }
+  .sheet-list{
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+  .sheet-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 10px;
+    border:none;
+    background:none;
+    text-align:left;
+    font-family: var(--font-body);
+    font-size:15px;
+    color: var(--ink);
+    border-radius: 12px;
+    cursor:pointer;
+  }
+  .sheet-row:active{ background: var(--accent-soft); }
+  .sheet-row .flag{ font-size:20px; }
+  .sheet-row .code{ font-family: var(--font-display); font-weight:700; width:44px; }
+  .sheet-row .name{ color: var(--ink-soft); font-size:14px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .notes, .sheet, .swap-btn, .refresh-btn svg{ animation:none !important; transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="app">
+    <div class="topbar">
+      <p class="eyebrow">Omregner</p>
+      <button class="theme-btn" id="theme-btn" aria-label="Skift tema">🌙</button>
+    </div>
+
+    <div class="notes">
+      <div class="note note-from">
+        <span class="slot-label">Fra</span>
+        <button class="currency-chip" id="chip-from" data-slot="from">
+          <span class="flag">🇩🇰</span><span class="code">DKK</span><span class="caret">▾</span>
+        </button>
+        <input class="amount-input" id="amount-input" type="text" inputmode="decimal" value="100" aria-label="Beløb">
+      </div>
+
+      <div class="divider"></div>
+      <button class="swap-btn" id="swap-btn" aria-label="Byt valutaer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 10 L7 4 M7 4 L4 7 M7 4 L10 7"/>
+          <path d="M17 14 L17 20 M17 20 L20 17 M17 20 L14 17"/>
+        </svg>
+      </button>
+
+      <div class="note note-to">
+        <span class="slot-label">Til</span>
+        <button class="currency-chip" id="chip-to" data-slot="to">
+          <span class="flag">🇸🇪</span><span class="code">SEK</span><span class="caret">▾</span>
+        </button>
+        <div class="amount-result" id="result" aria-live="polite">…</div>
+      </div>
+    </div>
+
+    <div class="rate-ticker">
+      <span id="rate-text"></span>
+      <button class="refresh-btn" id="refresh-btn" aria-label="Opdater kurs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 11a8 8 0 1 0-2.3 5.7M20 11V5M20 11h-6"/>
+        </svg>
+      </button>
+    </div>
+    <p class="status-msg" id="status-msg"></p>
+  </div>
+
+  <div class="sheet-overlay" id="sheet-overlay">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <input class="sheet-search" id="sheet-search" type="text" placeholder="Søg valuta eller land" autocomplete="off">
+      <div class="sheet-list" id="sheet-list"></div>
+    </div>
+  </div>
+
+<script>
+  const CURRENCIES = [
+    {code:'AUD', flag:'\u{1F1E6}\u{1F1FA}', name:'Australske dollar'},
+    {code:'BGN', flag:'\u{1F1E7}\u{1F1EC}', name:'Bulgarske lev'},
+    {code:'BRL', flag:'\u{1F1E7}\u{1F1F7}', name:'Brasilianske real'},
+    {code:'CAD', flag:'\u{1F1E8}\u{1F1E6}', name:'Canadiske dollar'},
+    {code:'CHF', flag:'\u{1F1E8}\u{1F1ED}', name:'Schweizerfranc'},
+    {code:'CNY', flag:'\u{1F1E8}\u{1F1F3}', name:'Kinesiske yuan'},
+    {code:'CZK', flag:'\u{1F1E8}\u{1F1FF}', name:'Tjekkiske koruna'},
+    {code:'DKK', flag:'\u{1F1E9}\u{1F1F0}', name:'Danske kroner'},
+    {code:'EUR', flag:'\u{1F1EA}\u{1F1FA}', name:'Euro'},
+    {code:'GBP', flag:'\u{1F1EC}\u{1F1E7}', name:'Britiske pund'},
+    {code:'HKD', flag:'\u{1F1ED}\u{1F1F0}', name:'Hongkong dollar'},
+    {code:'HUF', flag:'\u{1F1ED}\u{1F1FA}', name:'Ungarske forint'},
+    {code:'IDR', flag:'\u{1F1EE}\u{1F1E9}', name:'Indonesiske rupiah'},
+    {code:'ILS', flag:'\u{1F1EE}\u{1F1F1}', name:'Israelske shekel'},
+    {code:'INR', flag:'\u{1F1EE}\u{1F1F3}', name:'Indiske rupee'},
+    {code:'ISK', flag:'\u{1F1EE}\u{1F1F8}', name:'Islandske kroner'},
+    {code:'JPY', flag:'\u{1F1EF}\u{1F1F5}', name:'Japanske yen'},
+    {code:'KRW', flag:'\u{1F1F0}\u{1F1F7}', name:'Sydkoreanske won'},
+    {code:'MXN', flag:'\u{1F1F2}\u{1F1FD}', name:'Mexicanske peso'},
+    {code:'MYR', flag:'\u{1F1F2}\u{1F1FE}', name:'Malaysiske ringgit'},
+    {code:'NOK', flag:'\u{1F1F3}\u{1F1F4}', name:'Norske kroner'},
+    {code:'NZD', flag:'\u{1F1F3}\u{1F1FF}', name:'New Zealandske dollar'},
+    {code:'PHP', flag:'\u{1F1F5}\u{1F1ED}', name:'Filippinske peso'},
+    {code:'PLN', flag:'\u{1F1F5}\u{1F1F1}', name:'Polske zloty'},
+    {code:'RON', flag:'\u{1F1F7}\u{1F1F4}', name:'Rumænske leu'},
+    {code:'SEK', flag:'\u{1F1F8}\u{1F1EA}', name:'Svenske kroner'},
+    {code:'SGD', flag:'\u{1F1F8}\u{1F1EC}', name:'Singaporeanske dollar'},
+    {code:'THB', flag:'\u{1F1F9}\u{1F1ED}', name:'Thailandske baht'},
+    {code:'TRY', flag:'\u{1F1F9}\u{1F1F7}', name:'Tyrkiske lira'},
+    {code:'USD', flag:'\u{1F1FA}\u{1F1F8}', name:'Amerikanske dollar'},
+    {code:'ZAR', flag:'\u{1F1FF}\u{1F1E6}', name:'Sydafrikanske rand'},
+  ];
+  const byCode = Object.fromEntries(CURRENCIES.map(c => [c.code, c]));
+
+  // Reservekurser (per 1 EUR). Bruges hvis netværket ikke svarer.
+  const FALLBACK_DATE = '2026-05-24';
+  const FALLBACK_EUR = {
+    EUR:1, AUD:1.6302, BGN:1.9466, BRL:5.8224, CAD:1.6015, CHF:0.91393,
+    CNY:7.8928, CZK:24.324, DKK:7.4796, GBP:0.86493, HKD:9.113, HUF:359.74,
+    IDR:20557, ILS:3.3708, INR:111.49, ISK:143.78, JPY:184.93, KRW:1757.46,
+    MXN:20.141, MYR:4.607, NOK:10.7471, NZD:1.9822, PHP:71.609, PLN:4.2501,
+    RON:5.2544, SEK:10.8715, SGD:1.4869, THB:37.951, TRY:53.082, USD:1.162,
+    ZAR:19.1357
+  };
+
+  const state = {
+    from:'DKK', to:'SEK', amount:100,
+    eurRates: {...FALLBACK_EUR},
+    date: FALLBACK_DATE,
+    live: false,
+    activeSlot: null
+  };
+
+  const amountInput = document.getElementById('amount-input');
+  const resultEl = document.getElementById('result');
+  const rateTextEl = document.getElementById('rate-text');
+  const statusEl = document.getElementById('status-msg');
+  const chipFrom = document.getElementById('chip-from');
+  const chipTo = document.getElementById('chip-to');
+  const swapBtn = document.getElementById('swap-btn');
+  const refreshBtn = document.getElementById('refresh-btn');
+  const overlay = document.getElementById('sheet-overlay');
+  const sheetSearch = document.getElementById('sheet-search');
+  const sheetList = document.getElementById('sheet-list');
+
+  function daDate(iso){
+    const d = new Date(iso + 'T00:00:00');
+    if(isNaN(d)) return iso;
+    return d.toLocaleDateString('da-DK', {day:'numeric', month:'short', year:'numeric'});
+  }
+  const fmtAmount = n => n.toLocaleString('da-DK', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtRate = n => n.toLocaleString('da-DK', {minimumFractionDigits:4, maximumFractionDigits:4});
+
+  function updateChipLabel(chipEl, code){
+    const c = byCode[code];
+    chipEl.querySelector('.flag').textContent = c.flag;
+    chipEl.querySelector('.code').textContent = c.code;
+  }
+  function updateChips(){
+    updateChipLabel(chipFrom, state.from);
+    updateChipLabel(chipTo, state.to);
+  }
+
+  function currentRate(){
+    const f = state.eurRates[state.from];
+    const t = state.eurRates[state.to];
+    if(!f || !t) return null;
+    return t / f;
+  }
+
+  function recompute(){
+    const rate = currentRate();
+    if(rate == null){
+      resultEl.textContent = '\u2014';
+      rateTextEl.textContent = 'Kursen mangler for denne valuta.';
+      return;
+    }
+    resultEl.textContent = fmtAmount(state.amount * rate);
+    rateTextEl.textContent = `1 ${state.from} = ${fmtRate(rate)} ${state.to}`;
+    statusEl.textContent = state.live
+      ? `Live kurs, noteret ${daDate(state.date)}`
+      : `Reservekurs fra ${daDate(state.date)}. Ingen forbindelse.`;
+    statusEl.style.color = state.live ? 'var(--ink-soft)' : 'var(--gold)';
+  }
+
+  async function fetchRates(){
+    refreshBtn.classList.add('spin');
+    try{
+      const res = await fetch('https://api.frankfurter.dev/v2/rates?_=' + Date.now(), {cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const rows = await res.json();
+      const next = { EUR: 1 };
+      let latest = '';
+      for(const row of rows){
+        if(row && row.quote && typeof row.rate === 'number'){
+          next[row.quote] = row.rate;
+          if(row.date > latest) latest = row.date;
+        }
+      }
+      if(Object.keys(next).length < 5) throw new Error('Tomt svar');
+      state.eurRates = {...FALLBACK_EUR, ...next};
+      state.date = latest || state.date;
+      state.live = true;
+    }catch(err){
+      state.live = false;
+    }finally{
+      refreshBtn.classList.remove('spin');
+      recompute();
+    }
+  }
+
+  amountInput.addEventListener('input', (e) => {
+    const v = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+    const num = parseFloat(v);
+    state.amount = isNaN(num) ? 0 : num;
+    recompute();
+  });
+
+  swapBtn.addEventListener('click', () => {
+    [state.from, state.to] = [state.to, state.from];
+    updateChips();
+    swapBtn.classList.add('spin');
+    setTimeout(() => swapBtn.classList.remove('spin'), 350);
+    recompute();
+  });
+
+  refreshBtn.addEventListener('click', fetchRates);
+
+  function openSheet(slot){
+    state.activeSlot = slot;
+    sheetSearch.value = '';
+    renderList('');
+    overlay.classList.add('open');
+    setTimeout(() => sheetSearch.focus(), 50);
+  }
+  function closeSheet(){
+    overlay.classList.remove('open');
+    state.activeSlot = null;
+  }
+  function renderList(query){
+    const q = query.trim().toLowerCase();
+    const filtered = CURRENCIES.filter(c =>
+      c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    );
+    sheetList.innerHTML = filtered.map(c =>
+      `<button class="sheet-row" data-code="${c.code}"><span class="flag">${c.flag}</span><span class="code">${c.code}</span><span class="name">${c.name}</span></button>`
+    ).join('');
+    sheetList.querySelectorAll('.sheet-row').forEach(row => {
+      row.addEventListener('click', () => selectCurrency(row.dataset.code));
+    });
+  }
+  function selectCurrency(code){
+    const slot = state.activeSlot;
+    if(!slot) return;
+    if(slot === 'from') state.from = code; else state.to = code;
+    updateChips();
+    closeSheet();
+    recompute();
+  }
+
+  chipFrom.addEventListener('click', () => openSheet('from'));
+  chipTo.addEventListener('click', () => openSheet('to'));
+  sheetSearch.addEventListener('input', (e) => renderList(e.target.value));
+  overlay.addEventListener('click', (e) => { if(e.target === overlay) closeSheet(); });
+
+  const themeBtn = document.getElementById('theme-btn');
+  function setTheme(mode){
+    document.documentElement.dataset.theme = mode;
+    themeBtn.textContent = mode === 'dark' ? '☀️' : '🌙';
+    themeBtn.setAttribute('aria-label', mode === 'dark' ? 'Skift til lyst tema' : 'Skift til mørkt tema');
+  }
+  setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  themeBtn.addEventListener('click', () => {
+    setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+  });
+
+  updateChips();
+  recompute();
+  fetchRates();
+</script>
+</body>
+</html>
