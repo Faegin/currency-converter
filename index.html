@@ -397,6 +397,7 @@
     date: FALLBACK_DATE,
     live: false,
     error: '',
+    source: '',
     activeSlot: null
   };
 
@@ -447,34 +448,67 @@
     resultEl.textContent = fmtAmount(state.amount * rate);
     rateTextEl.textContent = `1 ${state.from} = ${fmtRate(rate)} ${state.to}`;
     statusEl.textContent = state.live
-      ? `Live kurs, noteret ${daDate(state.date)}`
+      ? `Live kurs \u00b7 ${daDate(state.date)} \u00b7 ${state.source}`
       : `Reservekurs ${daDate(state.date)} \u00b7 ${state.error || 'ikke hentet endnu'}`;
     statusEl.style.color = state.live ? 'var(--ink-soft)' : 'var(--gold)';
   }
 
+  const SOURCES = [
+    {
+      name: 'jsDelivr',
+      url: 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json',
+      parse: d => {
+        const src = d && d.eur;
+        if(!src) return null;
+        const out = { EUR: 1 };
+        for(const k in src) out[k.toUpperCase()] = src[k];
+        return { rates: out, date: d.date };
+      }
+    },
+    {
+      name: 'Cloudflare',
+      url: 'https://latest.currency-api.pages.dev/v1/currencies/eur.json',
+      parse: d => {
+        const src = d && d.eur;
+        if(!src) return null;
+        const out = { EUR: 1 };
+        for(const k in src) out[k.toUpperCase()] = src[k];
+        return { rates: out, date: d.date };
+      }
+    },
+    {
+      name: 'Frankfurter',
+      url: 'https://api.frankfurter.dev/v1/latest?from=EUR',
+      parse: d => {
+        if(!d || !d.rates) return null;
+        return { rates: { EUR: 1, ...d.rates }, date: d.date };
+      }
+    }
+  ];
+
   async function fetchRates(){
     refreshBtn.classList.add('spin');
+    const problems = [];
     try{
-      const res = await fetch('https://api.frankfurter.dev/v2/rates?base=EUR', {cache:'no-store'});
-      if(!res.ok) throw new Error('HTTP ' + res.status);
-      const rows = await res.json();
-      const next = { EUR: 1 };
-      let latest = '';
-      for(const row of rows){
-        if(row && row.quote && typeof row.rate === 'number'){
-          next[row.quote] = row.rate;
-          if(row.date > latest) latest = row.date;
+      for(const source of SOURCES){
+        try{
+          const res = await fetch(source.url, {cache:'no-store'});
+          if(!res.ok) throw new Error('HTTP ' + res.status);
+          const parsed = source.parse(await res.json());
+          if(!parsed || Object.keys(parsed.rates).length < 5) throw new Error('uventet format');
+          state.eurRates = {...FALLBACK_EUR, ...parsed.rates};
+          state.date = parsed.date || state.date;
+          state.source = source.name;
+          state.live = true;
+          state.error = '';
+          return;
+        }catch(err){
+          problems.push(`${source.name}: ${err.message}`);
         }
       }
-      if(Object.keys(next).length < 5) throw new Error('Tomt svar fra API');
-      state.eurRates = {...FALLBACK_EUR, ...next};
-      state.date = latest || state.date;
-      state.live = true;
-      state.error = '';
-    }catch(err){
       state.live = false;
-      state.error = (err && err.message) ? err.message : String(err);
-      console.error('Kurshentning fejlede:', err);
+      state.error = problems.join(' / ');
+      console.error('Alle kurskilder fejlede:', problems);
     }finally{
       refreshBtn.classList.remove('spin');
       recompute();
