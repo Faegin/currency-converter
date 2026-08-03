@@ -396,6 +396,7 @@
     eurRates: {...FALLBACK_EUR},
     date: FALLBACK_DATE,
     live: false,
+    error: '',
     activeSlot: null
   };
 
@@ -447,7 +448,7 @@
     rateTextEl.textContent = `1 ${state.from} = ${fmtRate(rate)} ${state.to}`;
     statusEl.textContent = state.live
       ? `Live kurs, noteret ${daDate(state.date)}`
-      : `Reservekurs fra ${daDate(state.date)}. Ingen forbindelse.`;
+      : `Reservekurs ${daDate(state.date)} \u00b7 ${state.error || 'ikke hentet endnu'}`;
     statusEl.style.color = state.live ? 'var(--ink-soft)' : 'var(--gold)';
   }
 
@@ -465,12 +466,15 @@
           if(row.date > latest) latest = row.date;
         }
       }
-      if(Object.keys(next).length < 5) throw new Error('Tomt svar');
+      if(Object.keys(next).length < 5) throw new Error('Tomt svar fra API');
       state.eurRates = {...FALLBACK_EUR, ...next};
       state.date = latest || state.date;
       state.live = true;
+      state.error = '';
     }catch(err){
       state.live = false;
+      state.error = (err && err.message) ? err.message : String(err);
+      console.error('Kurshentning fejlede:', err);
     }finally{
       refreshBtn.classList.remove('spin');
       recompute();
