@@ -455,7 +455,7 @@
   async function fetchRates(){
     refreshBtn.classList.add('spin');
     try{
-      const res = await fetch('https://api.frankfurter.dev/v2/rates?_=' + Date.now(), {cache:'no-store'});
+      const res = await fetch('https://api.frankfurter.dev/v2/rates?base=EUR', {cache:'no-store'});
       if(!res.ok) throw new Error('HTTP ' + res.status);
       const rows = await res.json();
       const next = { EUR: 1 };
