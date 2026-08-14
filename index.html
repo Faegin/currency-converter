@@ -351,7 +351,7 @@
       <div class="note note-from">
         <span class="slot-label">Fra</span>
         <button class="currency-chip" id="chip-from" data-slot="from">
-          <span class="flag">🇩🇰</span><span class="code">DKK</span><span class="caret">▾</span>
+          <span class="flag">🇸🇪</span><span class="code">SEK</span><span class="caret">▾</span>
         </button>
         <input class="amount-input" id="amount-input" type="text" inputmode="decimal" value="100" aria-label="Beløb">
       </div>
@@ -367,7 +367,7 @@
       <div class="note note-to">
         <span class="slot-label">Til</span>
         <button class="currency-chip" id="chip-to" data-slot="to">
-          <span class="flag">🇸🇪</span><span class="code">SEK</span><span class="caret">▾</span>
+          <span class="flag">🇩🇰</span><span class="code">DKK</span><span class="caret">▾</span>
         </button>
         <div class="amount-result" id="result" aria-live="polite">…</div>
       </div>
@@ -452,7 +452,7 @@
   };
 
   const state = {
-    from:'DKK', to:'SEK', amount:100,
+    from:'SEK', to:'DKK', amount:100,
     eurRates: {...FALLBACK_EUR},
     date: FALLBACK_DATE,
     live: false,
@@ -583,9 +583,15 @@
     recompute();
   });
 
+  function saveCurrencies(){
+    store.set('fra', state.from);
+    store.set('til', state.to);
+  }
+
   swapBtn.addEventListener('click', () => {
     [state.from, state.to] = [state.to, state.from];
     updateChips();
+    saveCurrencies();
     swapBtn.classList.add('spin');
     setTimeout(() => swapBtn.classList.remove('spin'), 350);
     recompute();
@@ -621,6 +627,7 @@
     if(!slot) return;
     if(slot === 'from') state.from = code; else state.to = code;
     updateChips();
+    saveCurrencies();
     closeSheet();
     recompute();
   }
@@ -685,6 +692,12 @@
       state.live = true;
     }
   }catch(e){}
+
+  // Husk sidst valgte valutaer. Default er SEK -> DKK indtil brugeren vælger noget andet.
+  const savedFrom = store.get('fra');
+  const savedTil = store.get('til');
+  if(savedFrom && byCode[savedFrom]) state.from = savedFrom;
+  if(savedTil && byCode[savedTil]) state.to = savedTil;
 
   updateChips();
   recompute();

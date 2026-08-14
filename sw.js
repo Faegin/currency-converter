@@ -1,5 +1,5 @@
 // Hæv dette tal når du ændrer index.html, ellers serverer browseren den gamle version.
-const CACHE = 'valuta-v1';
+const CACHE = 'valuta-v2';
 
 const SHELL = [
   './',
