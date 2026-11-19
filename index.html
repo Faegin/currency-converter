@@ -401,7 +401,6 @@
 <script>
   const CURRENCIES = [
     {code:'AUD', flag:'\u{1F1E6}\u{1F1FA}', name:'Australske dollar'},
-    {code:'BGN', flag:'\u{1F1E7}\u{1F1EC}', name:'Bulgarske lev'},
     {code:'BRL', flag:'\u{1F1E7}\u{1F1F7}', name:'Brasilianske real'},
     {code:'CAD', flag:'\u{1F1E8}\u{1F1E6}', name:'Canadiske dollar'},
     {code:'CHF', flag:'\u{1F1E8}\u{1F1ED}', name:'Schweizerfranc'},
@@ -437,7 +436,7 @@
   // Reservekurser (per 1 EUR). Bruges hvis netværket ikke svarer.
   const FALLBACK_DATE = '2026-05-24';
   const FALLBACK_EUR = {
-    EUR:1, AUD:1.6302, BGN:1.9466, BRL:5.8224, CAD:1.6015, CHF:0.91393,
+    EUR:1, AUD:1.6302, BRL:5.8224, CAD:1.6015, CHF:0.91393,
     CNY:7.8928, CZK:24.324, DKK:7.4796, GBP:0.86493, HKD:9.113, HUF:359.74,
     IDR:20557, ILS:3.3708, INR:111.49, ISK:143.78, JPY:184.93, KRW:1757.46,
     MXN:20.141, MYR:4.607, NOK:10.7471, NZD:1.9822, PHP:71.609, PLN:4.2501,
@@ -455,7 +454,8 @@
     from:'SEK', to:'DKK', amount:100,
     eurRates: {...FALLBACK_EUR},
     date: FALLBACK_DATE,
-    live: false,
+    kind: 'indbygget',      // 'live' (hentet nu), 'gemt' (fra localStorage) eller 'indbygget' (FALLBACK_EUR)
+    liveCodes: new Set(),   // valutaer som kilden faktisk leverede; resten kommer fra FALLBACK_EUR
     error: '',
     source: '',
     activeSlot: null
@@ -507,10 +507,20 @@
     }
     resultEl.textContent = fmtAmount(state.amount * rate);
     rateTextEl.textContent = `1 ${state.from} = ${fmtRate(rate)} ${state.to}`;
-    statusEl.textContent = state.live
-      ? `Live kurs \u00b7 ${daDate(state.date)} \u00b7 ${state.source}`
-      : `Reservekurs ${daDate(state.date)} \u00b7 ${state.error || 'ikke hentet endnu'}`;
-    statusEl.style.color = state.live ? 'var(--ink-soft)' : 'var(--gold)';
+    // Valutaer som kilden ikke leverede, tages fra den indbyggede tabel. Det skal stå i statuslinjen.
+    const filled = state.kind === 'indbygget' ? [] :
+      [state.from, state.to].filter(c => c !== 'EUR' && !state.liveCodes.has(c));
+    let msg;
+    if(state.kind === 'live'){
+      msg = `Live kurs \u00b7 ${daDate(state.date)} \u00b7 ${state.source}`;
+    }else if(state.kind === 'gemt'){
+      msg = `Gemt kurs \u00b7 ${daDate(state.date)} \u00b7 ${state.source}` + (state.error ? ` \u00b7 ${state.error}` : '');
+    }else{
+      msg = `Indbygget kurs ${daDate(FALLBACK_DATE)} \u00b7 ${state.error || 'ikke hentet endnu'}`;
+    }
+    if(filled.length) msg += ` \u00b7 ${filled.join(', ')} fra indbygget kurs ${daDate(FALLBACK_DATE)}`;
+    statusEl.textContent = msg;
+    statusEl.style.color = (state.kind === 'live' && !filled.length) ? 'var(--ink-soft)' : 'var(--gold)';
   }
 
   const SOURCES = [
@@ -546,20 +556,40 @@
     }
   ];
 
+  // Uden timeout kan en kilde der hænger (dårligt wifi, captive portal) blokere i minutter,
+  // og de næste kilder bliver aldrig prøvet.
+  const FETCH_TIMEOUT_MS = 5000;
+  async function fetchWithTimeout(url, ms){
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try{
+      return await fetch(url, {cache:'no-store', signal: ctrl.signal});
+    }catch(err){
+      if(err.name === 'AbortError') throw new Error(`timeout ${ms/1000} s`);
+      throw err;
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+
+  let fetching = false;
   async function fetchRates(){
+    if(fetching) return;
+    fetching = true;
     refreshBtn.classList.add('spin');
     const problems = [];
     try{
       for(const source of SOURCES){
         try{
-          const res = await fetch(source.url, {cache:'no-store'});
+          const res = await fetchWithTimeout(source.url, FETCH_TIMEOUT_MS);
           if(!res.ok) throw new Error('HTTP ' + res.status);
           const parsed = source.parse(await res.json());
           if(!parsed || Object.keys(parsed.rates).length < 5) throw new Error('uventet format');
           state.eurRates = {...FALLBACK_EUR, ...parsed.rates};
+          state.liveCodes = new Set(Object.keys(parsed.rates));
           state.date = parsed.date || state.date;
           state.source = source.name;
-          state.live = true;
+          state.kind = 'live';
           state.error = '';
           store.set('kurser', JSON.stringify({rates: parsed.rates, date: parsed.date, source: source.name}));
           return;
@@ -567,19 +597,42 @@
           problems.push(`${source.name}: ${err.message}`);
         }
       }
-      state.live = false;
+      // Behold gemte kurser hvis vi har dem ('gemt'), ellers den indbyggede tabel.
+      if(state.kind === 'live') state.kind = 'gemt';
       state.error = problems.join(' / ');
       console.error('Alle kurskilder fejlede:', problems);
     }finally{
       refreshBtn.classList.remove('spin');
+      fetching = false;
       recompute();
     }
   }
 
-  amountInput.addEventListener('input', (e) => {
-    const v = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+  // Læser både dansk (1.000,50) og engelsk (1,000.50) format.
+  // Står begge tegn i tallet, er det sidste decimaltegnet. Står kun ét tegn, er det
+  // tusindtalsseparator hvis det optræder flere gange eller (for punktum) står foran
+  // præcis tre cifre, som i "1.000". Ellers er det decimaltegn.
+  function parseAmount(raw){
+    let v = String(raw).replace(/[^\d.,]/g, '');
+    const lastDot = v.lastIndexOf('.'), lastComma = v.lastIndexOf(',');
+    if(lastDot >= 0 && lastComma >= 0){
+      const dec = lastDot > lastComma ? '.' : ',';
+      const thou = dec === '.' ? ',' : '.';
+      v = v.split(thou).join('').replace(dec, '.');
+    }else if(lastComma >= 0){
+      v = (v.split(',').length > 2) ? v.split(',').join('') : v.replace(',', '.');
+    }else if(lastDot >= 0){
+      const parts = v.split('.');
+      const thousands = parts.length > 2 ||
+        (parts[1].length === 3 && /[1-9]/.test(parts[0]));
+      if(thousands) v = parts.join('');
+    }
     const num = parseFloat(v);
-    state.amount = isNaN(num) ? 0 : num;
+    return isNaN(num) ? 0 : num;
+  }
+
+  amountInput.addEventListener('input', (e) => {
+    state.amount = parseAmount(e.target.value);
     recompute();
   });
 
@@ -687,9 +740,10 @@
     const cached = JSON.parse(store.get('kurser'));
     if(cached && cached.rates && Object.keys(cached.rates).length > 5){
       state.eurRates = {...FALLBACK_EUR, ...cached.rates};
+      state.liveCodes = new Set(Object.keys(cached.rates));
       state.date = cached.date || state.date;
-      state.source = (cached.source || 'gemt') + ', gemt';
-      state.live = true;
+      state.source = cached.source || 'ukendt kilde';
+      state.kind = 'gemt';
     }
   }catch(e){}
 
